@@ -1,0 +1,98 @@
+name: 自动同步 YouTube 净化中文模块
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 2 * * *'  # UTC 02:23 / 北京时间 10:23
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 获取作者最新版并生成中文版
+        run: |
+          python - <<'PY'
+          import hashlib, json, re, urllib.request
+          from pathlib import Path
+          U='https://raw.githubusercontent.com/devchristian1337/loon-plugins/refs/heads/main/Plugins/YouTube.lpx'
+          M={'background_playback': ['后台播放', '切换至其他 App 或锁屏后继续播放普通视频的声音。直播及受限制内容是否可以播放仍由 YouTube 决定', 'd323de65'], 'playback_region': ['播放请求地区', 'original 表示保持原来的地区。只修改播放请求中的客户端 gl 地区参数，不改变代理出口 IP，也不影响广告拦截', '65097ecf'], 'translation_enabled': ['字幕翻译', '将视频已有的字幕翻译为所选目标语言。关闭后保留原始字幕请求', '061d931e'], 'translation_target': ['字幕目标语言', '仅转换视频已有的字幕轨道：zh-CN 为简体中文、en-US 为美式英语。没有字幕的视频无法翻译；音轨、标题和简介不会改变', '292f67a6'], 'hide_home_shorts': ['隐藏首页 Shorts 推荐栏', '移除首页动态中的 Shorts 短视频推荐栏。其他页面保持不变；底部 Shorts 标签有独立开关', '127729c0'], 'hide_shorts_everywhere': ['隐藏所有页面的 Shorts 推荐栏', '隐藏首页、搜索结果、订阅页及频道页中采用相同布局的 Shorts 推荐栏。已包含首页功能，因此无需再开启上方的首页开关。单条 Shorts 结果及底部 Shorts 标签仍保留', '90de35d8'], 'hide_shorts_tab': ['隐藏底部 Shorts 标签', '移除 App 底部导航栏的 Shorts 按钮。仍可从动态和频道进入 Shorts。底部导航可能缓存约一小时；如未立即生效可重启 YouTube', '7653c14c'], 'hide_create_button': ['隐藏底部创建按钮', '移除 App 底部导航栏的创建（+）按钮。仍可从其他入口上传视频。底部导航可能缓存约一小时；如未立即生效可重启 YouTube', '795546dd'], 'blocked_channels': ['屏蔽频道（手动列表）', '填写频道 ID、@用户名或频道完整名称；多个条目用空格分隔。建议优先使用频道 ID；名称带空格时使用 ID 或 @用户名。留空即关闭；只会隐藏能够识别发布者的内容', '7d89e8d0'], 'blocked_channels_url': ['远程频道屏蔽列表链接', '填写可公开访问的 HTTPS 纯文本直链（例如 GitHub Raw）。启用定时更新后每小时刷新本地缓存；也可在启用更新后从插件脚本列表手动运行刷新脚本。远程列表与手动列表合并；留空即禁用', '4011a48c'], 'blocked_channels_update': ['定时更新频道屏蔽列表', '每小时刷新一次远程频道屏蔽列表。只有设置了远程链接才需要开启；关闭后定时任务停用且无法手动运行该任务，已有缓存会保持原样', '253e0a47'], 'log_enabled': ['日志记录工具', '遇到第一个匹配请求时自动开始记录并通知日志入口。关闭后会在下一次 API 请求时清空日志并停止采样；如需保存请先导出。完整采样可能增加延迟', 'f2ff7cf7'], 'quality_research': ['画质研究采样', '仅在开启日志工具时生效。记录可识别的画质和格式参数，并读取少量媒体 POST 请求用于分析比较；不会自动切换画质', '8b9ee83c'], 'media_capture_mode': ['媒体采样模式', '仅在开启日志工具时生效；关闭日志后自动禁用采样。headers 仅记录响应头；full 读取完整响应内容供开发分析使用，可能增加延迟', '2128d017'], 'log_level': ['日志级别', 'info 记录完整的脱敏日志；debug 记录调试级别信息；warn 只记录警告和错误；error 仅记录错误', '0ce59460'], 'capture_budget': ['日志容量上限（MB）', '达到容量上限后停止记录并保留已有样本。导出后可清理缓存', 'd412c59c']}
+          S={'YouTube scheduled blocked channels update': 'YouTube 定时更新频道屏蔽列表', 'YouTube subtitle target language': 'YouTube 字幕目标语言处理', 'YouTube quality research request sampling': 'YouTube 画质研究请求采样', 'YouTube logging and export': 'YouTube 日志记录与导出', 'YouTube config request handling': 'YouTube 配置请求处理', 'YouTube full media development sampling': 'YouTube 完整媒体开发采样', 'YouTube media response logging': 'YouTube 媒体响应日志', 'YouTube Onesie config cache': 'YouTube Onesie 配置缓存', 'YouTube playback request and ad config handling': 'YouTube 播放请求与广告配置处理', 'YouTube bottom bar Shorts tab and Create button': 'YouTube 底部 Shorts 与创建按钮处理', 'YouTube feed ads and Shorts shelves handling': 'YouTube 动态广告与 Shorts 推荐栏处理', 'YouTube playback response and background playback': 'YouTube 播放响应与后台播放'}
+          META={'name': 'YouTube 净化（Clash 中文自动更新）', 'desc': '同步原作者 YouTube 插件，保留中文设置、广告净化、后台播放、Shorts 隐藏、频道屏蔽、字幕翻译和日志功能；需信任 HTTPS 解密证书。'}
+          def sig(t):
+              h=0x811c9dc5
+              for b in t.encode('utf-8'):
+                  h=((h^b)*0x01000193)&0xffffffff
+              return f'{h:08x}'
+          r=urllib.request.Request(U,headers={'User-Agent':'YouTube-CN-Builder/1.0'})
+          with urllib.request.urlopen(r,timeout=25) as f:
+              raw=f.read(2000001)
+          if len(raw)>2000000: raise ValueError('Unexpectedly large upstream plugin')
+          source=raw.decode('utf-8-sig')
+          if not source.startswith('#!name') or 'devchristian1337/loon-plugins' not in source or '\x00' in source: raise ValueError('Unexpected upstream source')
+          sections=re.findall(r'^\[([^]]+)\]$',source,re.M)
+          if not set(['Argument','Rule','Rewrite','Script','Mitm'])<=set(sections): raise ValueError('Missing plugin section')
+          regarg=re.compile(r'^(.*?),tag=([^,]*),desc=(.*)$')
+          regtag=re.compile(r'(?<![\w-])tag=(?:"([^"]+)"|([^,\n]+))')
+          section='metadata'; out=[]; unknown=[]
+          for line in source.splitlines(keepends=True):
+              end='\r\n' if line.endswith('\r\n') else '\n' if line.endswith('\n') else ''
+              a=line[:-len(end)] if end else line
+              sm=re.fullmatch(r'\[([^]]+)\]',a)
+              if sm: section=sm.group(1)
+              elif a.startswith('#!name') and section=='metadata': a='#!name = '+META['name']
+              elif a.startswith('#!desc') and section=='metadata': a='#!desc = '+META['desc']
+              elif section=='Argument' and a and not a.startswith('#'):
+                  match=regarg.match(a)
+                  if not match: raise ValueError('Unsupported argument directive: '+a[:100])
+                  key=match.group(1).split('=',1)[0].strip()
+                  entry=M.get(key)
+                  if entry and sig(match.group(2)+'\0'+match.group(3))==entry[2]:
+                      a=match.group(1)+',tag='+entry[0]+',desc='+entry[1]
+                  else: unknown.append('Changed/new setting: '+key)
+              elif section=='Script' and a and not a.startswith('#'):
+                  match=regtag.search(a)
+                  if match:
+                      old=match.group(1) or match.group(2)
+                      if old in S:
+                          label=('tag="'+S[old]+'"') if match.group(1) is not None else ('tag='+S[old])
+                          a=a[:match.start()]+label+a[match.end():]
+                      else: unknown.append('Changed/new script: '+old)
+              out.append(a+end)
+          result=''.join(out)
+          def active(s):
+              sec='metadata'; rows=[]
+              for line in s.splitlines():
+                  m=re.fullmatch(r'\[([^]]+)\]',line)
+                  if m: sec=m.group(1)
+                  elif line.strip() and not line.lstrip().startswith('#'): rows.append((sec,line))
+              return rows
+          b=active(source); aft=active(result)
+          if len(b)!=len(aft): raise ValueError('Directive count changed')
+          for (s,x),(t,y) in zip(b,aft):
+              if s!=t: raise ValueError('Section changed')
+              if s=='Argument':
+                  if x.split(',tag=',1)[0]!=y.split(',tag=',1)[0]: raise ValueError('Argument logic changed')
+              elif s=='Script':
+                  if regtag.sub('tag=LABEL',x)!=regtag.sub('tag=LABEL',y): raise ValueError('Script logic changed')
+              elif x!=y: raise ValueError('Network directive changed')
+          dest=Path('dist');dest.mkdir(exist_ok=True)
+          (dest/'YouTube_Clash_ZH.lpx').write_text(result,encoding='utf-8')
+          (dest/'translation_status.json').write_text(json.dumps({'upstream':U,'sha256':hashlib.sha256(raw).hexdigest(),'translated_settings':sum(',tag='+v[0] in result for v in M.values()),'warnings':sorted(set(unknown))},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print('Written Chinese plugin; warnings:',len(unknown))
+          PY
+      - name: 自动提交更新
+        run: |
+          git add dist/YouTube_Clash_ZH.lpx dist/translation_status.json
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: update Chinese YouTube plugin'
+          git push
