@@ -2,5 +2,8 @@
   "upstream": "https://raw.githubusercontent.com/devchristian1337/loon-plugins/refs/heads/main/Plugins/YouTube.lpx",
   "sha256": "eda9ce3f017cb4040b732b682f86237910b1762e8a76e4d084e74c3b833d8313",
   "translated_settings": 16,
-  "warnings": []
+  "warnings": [],
+  "local_experiment": "inserted: default-off experimental native reject(200)",
+  "experimental_default": false,
+  "experiment_scope": "/youtubei/v1/player/ad_break only"
 }

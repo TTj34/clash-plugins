@@ -10,6 +10,7 @@
 #!date = 2026-11-01
 
 [Argument]
+ad_break_native_fallback = switch,false,tag=实验拦截视频中插广告,desc=仅实验：开启后对 YouTube /player/ad_break 请求直接返回 HTTP 200 空响应。可能导致视频无法播放或跳播；无效时请关闭。默认关闭，不影响原作者脚本及其他设置
 background_playback = switch,false,tag=后台播放,desc=切换至其他 App 或锁屏后继续播放普通视频的声音。直播及受限制内容是否可以播放仍由 YouTube 决定
 playback_region = select,"original","CN","HK","TW","US","JP","KR","SG","GB","DE","RU",tag=播放请求地区,desc=original 表示保持原来的地区。只修改播放请求中的客户端 gl 地区参数，不改变代理出口 IP，也不影响广告拦截
 translation_enabled = switch,false,tag=字幕翻译,desc=将视频已有的字幕翻译为所选目标语言。关闭后保留原始字幕请求
@@ -36,6 +37,8 @@ AND,((DOMAIN-SUFFIX,googlevideo.com),(PROTOCOL,QUIC)),REJECT
 AND,((DOMAIN-SUFFIX,googlevideo.com),(PROTOCOL,UDP),(DEST-PORT,443)),REJECT
 
 [Rewrite]
+# 本地实验补丁：默认关闭，若播放异常请关闭「实验拦截视频中插广告」
+request if ${url} ~= /^https:\/\/(?:youtubei(?:-att)?\.googleapis\.com|(?:www\.|m\.|music\.)?youtube\.com)\/youtubei\/v1\/player\/ad_break(?:\?[^#]*)?$/i && ${ad_break_native_fallback} == true then reject(200)
 # Only the YouTube app init POST returns Loon's built-in blank video. The body is not read and regular media is unaffected.
 # Updated 2026-10-05. Replaces the failed HTTP 204 experiment. Playback fallback recovery still needs device verification.
 request if ${url} ~= /^https:\/\/[a-z0-9-]+\.googlevideo\.com\/initplayback(?:\?[^#]*)?$/i && ${request.method} == "POST" && ${request.header['User-Agent']} ~= /(?:^|\s)com\.google\.ios\.youtube\//i then reject_video(200)
